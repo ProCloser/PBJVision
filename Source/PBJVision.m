@@ -1056,7 +1056,7 @@ typedef void (^PBJVisionBlock)();
                 if ([_captureSession canAddOutput:_captureOutputAudio]) {
                     [_captureSession addOutput:_captureOutputAudio];
                 }
-                // vidja output
+                // video output
                 if ([_captureSession canAddOutput:_captureOutputVideo]) {
                     [_captureSession addOutput:_captureOutputVideo];
                     newCaptureOutput = _captureOutputVideo;
@@ -1087,93 +1087,103 @@ typedef void (^PBJVisionBlock)();
     // setup video connection
     AVCaptureConnection *videoConnection = [_captureOutputVideo connectionWithMediaType:AVMediaTypeVideo];
     
-    // setup input/output
-    
     NSString *sessionPreset = _captureSessionPreset;
 
-    if ( newCaptureOutput && (newCaptureOutput == _captureOutputVideo) && videoConnection ) {
-        
-        // setup video orientation
-        [self _setOrientationForConnection:videoConnection];
-        
-        // setup video stabilization, if available
-        if ([videoConnection isVideoStabilizationSupported]) {
-            if ([videoConnection respondsToSelector:@selector(setPreferredVideoStabilizationMode:)]) {
-                [videoConnection setPreferredVideoStabilizationMode:AVCaptureVideoStabilizationModeAuto];
-            }
-        }
-        
-        // discard late frames
-        [_captureOutputVideo setAlwaysDiscardsLateVideoFrames:YES];
-        
-        // specify video preset
-        sessionPreset = _captureSessionPreset;
+    // setup video orientation
+    
+    [self _setOrientationForConnection:videoConnection];
 
-        // setup video settings
-        // kCVPixelFormatType_420YpCbCr8BiPlanarFullRange Bi-Planar Component Y'CbCr 8-bit 4:2:0, full-range (luma=[0,255] chroma=[1,255])
-        // baseAddr points to a big-endian CVPlanarPixelBufferInfo_YCbCrBiPlanar struct
-        BOOL supportsFullRangeYUV = NO;
-        BOOL supportsVideoRangeYUV = NO;
-        NSArray *supportedPixelFormats = _captureOutputVideo.availableVideoCVPixelFormatTypes;
-        for (NSNumber *currentPixelFormat in supportedPixelFormats) {
-            if ([currentPixelFormat intValue] == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) {
-                supportsFullRangeYUV = YES;
+    // setup input/output
+    
+    if (shouldSwitchMode) {
+        
+        if ( newCaptureOutput && (newCaptureOutput == _captureOutputVideo) && videoConnection ) {
+            
+            // setup video orientation, move up
+//            [self _setOrientationForConnection:videoConnection];
+            
+            // setup video stabilization, if available
+            if ([videoConnection isVideoStabilizationSupported]) {
+                if ([videoConnection respondsToSelector:@selector(setPreferredVideoStabilizationMode:)]) {
+                    [videoConnection setPreferredVideoStabilizationMode:AVCaptureVideoStabilizationModeAuto];
+                }
             }
-            if ([currentPixelFormat intValue] == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) {
-                supportsVideoRangeYUV = YES;
+            
+            // discard late frames
+            [_captureOutputVideo setAlwaysDiscardsLateVideoFrames:YES];
+            
+            // specify video preset
+            sessionPreset = _captureSessionPreset;
+            
+            // setup video settings
+            // kCVPixelFormatType_420YpCbCr8BiPlanarFullRange Bi-Planar Component Y'CbCr 8-bit 4:2:0, full-range (luma=[0,255] chroma=[1,255])
+            // baseAddr points to a big-endian CVPlanarPixelBufferInfo_YCbCrBiPlanar struct
+            BOOL supportsFullRangeYUV = NO;
+            BOOL supportsVideoRangeYUV = NO;
+            NSArray *supportedPixelFormats = _captureOutputVideo.availableVideoCVPixelFormatTypes;
+            for (NSNumber *currentPixelFormat in supportedPixelFormats) {
+                if ([currentPixelFormat intValue] == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) {
+                    supportsFullRangeYUV = YES;
+                }
+                if ([currentPixelFormat intValue] == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) {
+                    supportsVideoRangeYUV = YES;
+                }
             }
-        }
-
-        NSDictionary *videoSettings = nil;
-        if (supportsFullRangeYUV) {
-            videoSettings = @{ (id)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) };
-        } else if (supportsVideoRangeYUV) {
-            videoSettings = @{ (id)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) };
-        }
-        if (videoSettings) {
-            [_captureOutputVideo setVideoSettings:videoSettings];
-        }
-        
-        // setup video device configuration
-        NSError *error = nil;
-        if ([newCaptureDevice lockForConfiguration:&error]) {
-        
-            // smooth autofocus for videos
-            if ([newCaptureDevice isSmoothAutoFocusSupported])
-                [newCaptureDevice setSmoothAutoFocusEnabled:YES];
             
-            [newCaptureDevice unlockForConfiguration];
-    
-        } else if (error) {
-            DLog(@"error locking device for video device configuration (%@)", error);
+            NSDictionary *videoSettings = nil;
+            if (supportsFullRangeYUV) {
+                videoSettings = @{ (id)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) };
+            } else if (supportsVideoRangeYUV) {
+                videoSettings = @{ (id)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) };
+            }
+            if (videoSettings) {
+                [_captureOutputVideo setVideoSettings:videoSettings];
+            }
+            
+            // setup video device configuration
+            NSError *error = nil;
+            if ([newCaptureDevice lockForConfiguration:&error]) {
+                
+                // smooth autofocus for videos
+                if ([newCaptureDevice isSmoothAutoFocusSupported])
+                    [newCaptureDevice setSmoothAutoFocusEnabled:YES];
+                
+                [newCaptureDevice unlockForConfiguration];
+                
+            } else if (error) {
+                DLog(@"error locking device for video device configuration (%@)", error);
+            }
+            
+        } else if ( newCaptureOutput && (newCaptureOutput == cameraOutput) ) {
+            
+            // specify photo preset
+            sessionPreset = _captureSessionPreset;
+            
+            // setup photo settings
+            if (![AVCapturePhotoOutput class]) {
+                NSDictionary *photoSettings = @{AVVideoCodecKey : AVVideoCodecJPEG};
+                [_captureOutputImage setOutputSettings:photoSettings];
+            }
+            
+            // setup photo device configuration
+            NSError *error = nil;
+            if ([newCaptureDevice lockForConfiguration:&error]) {
+                
+                if ([newCaptureDevice isLowLightBoostSupported])
+                    [newCaptureDevice setAutomaticallyEnablesLowLightBoostWhenAvailable:YES];
+                
+                [newCaptureDevice unlockForConfiguration];
+                
+            } else if (error) {
+                DLog(@"error locking device for photo device configuration (%@)", error);
+            }
+            
         }
         
-    } else if ( newCaptureOutput && (newCaptureOutput == cameraOutput) ) {
-    
-        // specify photo preset
-        sessionPreset = _captureSessionPreset;
-    
-        // setup photo settings
-        if (![AVCapturePhotoOutput class]) {
-            NSDictionary *photoSettings = @{AVVideoCodecKey : AVVideoCodecJPEG};
-            [_captureOutputImage setOutputSettings:photoSettings];
-        }
         
-        // setup photo device configuration
-        NSError *error = nil;
-        if ([newCaptureDevice lockForConfiguration:&error]) {
-            
-            if ([newCaptureDevice isLowLightBoostSupported])
-                [newCaptureDevice setAutomaticallyEnablesLowLightBoostWhenAvailable:YES];
-            
-            [newCaptureDevice unlockForConfiguration];
         
-        } else if (error) {
-            DLog(@"error locking device for photo device configuration (%@)", error);
-        }
-            
     }
-
+   
     // apply presets
     if ([_captureSession canSetSessionPreset:sessionPreset])
         [_captureSession setSessionPreset:sessionPreset];
@@ -2414,8 +2424,9 @@ previewPhotoSampleBuffer:(CMSampleBufferRef)previewPhotoSampleBuffer
     
         DLog(@"session was stopped");
         
-        if (_flags.recording)
+        if (_flags.recording){
             [self endVideoCapture];
+        }
     
         [self _enqueueBlockOnMainQueue:^{
             if ([_delegate respondsToSelector:@selector(visionSessionDidStop:)]) {
